@@ -1,6 +1,7 @@
 import argparse
 import csv
-import re
+import json
+from itertools import count
 
 import wordfreq
 import requests
@@ -66,36 +67,85 @@ class Scraper():
             data.append(dataAndHeadersInRowText)
         #print(tableForPandas)
 
-    def count_words(self , phrase):
+    def count_words(self , phrase): # done
         phrase_tmp = self.changingSpaceTo_(phrase)
         soup = self.SiteDownloader(self.link + '/' + phrase_tmp)
 
         if soup is None:
             return
-        text = soup.find("div" , class_ = "mw-content-ltr mw-parser-output").get_text(strip=True , separator=' ')
+        text = soup.find("div" , class_ = "mw-content-ltr mw-parser-output").get_text(strip=True , separator=" ")
 
-        print(text)
+        skips ={"(" , ")" , "[" , "]" , "{" , "}" , "\"" , "\'" , ";" , ":" , "*" , "!" , "?" , "`", "." , "," , "'" , "/" ,"…" , '”' ,'"' ,'“' , "’","×" }
+
         words = []
         word = ""
-        skips ={"(" , ")" , "[" , "]" , "{" , "}" , "\"" , "\'" , ";" , ":" , "*" , "!" , "?" , "`", "." , "," , "'s"}
         for letter in text:
             if letter == " ":
                 words.append(word)
                 word = ""
-            elif letter in skips:
+            elif letter in skips or letter.isdigit():
                 pass
             else:
                 word += letter.lower()
-        for word in text:
-            pass
+        #deleting hyperlinks
+        i = 0
+        while i < len(words):
+            word = words[i]
+            if word == "" or word[-1] == "-":
+                words.pop(i)
+            elif len(word) >= 4 and word[:4] == "http":
+                words.pop(i)
+            elif len(word) >= 3 and word[:3] == "www":
+                words.pop(i)
+            else:
+                i += 1
+
         setOfWords = {}
         for word in words:
             if word not in setOfWords:
                 setOfWords[word] = 1
             else:
                 setOfWords[word] += 1
-        df = pd.DataFrame(list(setOfWords.items()) , columns=['słowa' , 'licznik'])
-        print(df.head(n=100))
+        with open("./word-count.json" , "w"  , encoding="utf-8") as file:
+            json.dump(setOfWords ,file, ensure_ascii=False)
+        return True
+
+
+    def analyze_relative_word_freq(self, phrase , mode , count , chart = False):
+        if not self.count_words(phrase):
+            return False
+        with open("./word-count.json" , "r" , encoding="utf-8") as file:
+            siteData = json.load(file)
+        phrase_tmp = self.changingSpaceTo_(phrase)
+        response = requests.get(self.link + '/' + phrase_tmp)
+        language = response.headers.get("Content-Language")
+        setFrequencyLang = {}
+        setFrequencyArticle = {}
+        sumWords = 0
+        mostFrequencyLang = wordfreq.word_frequency(wordfreq.top_n_list(n = 1 , lang= language)[0] , language)
+
+        for word in siteData:
+            setFrequencyLang[word] = wordfreq.word_frequency(word , lang = language)/mostFrequencyLang
+            sumWords += siteData[word]
+        mostFrequencyArticle = max(siteData.values()) /sumWords
+        for word in siteData:
+            setFrequencyArticle[word] = (siteData[word]/sumWords)/mostFrequencyArticle
+        print(setFrequencyArticle ,"\n", setFrequencyLang)
+
+        df1 = pd.DataFrame(
+            list(setFrequencyLang.values()),
+            index= list(setFrequencyLang.keys()) ,
+            columns=["Frequency in wiki language"]
+        )
+        df2 = pd.DataFrame(
+            list(setFrequencyArticle.values()),
+            index= list(setFrequencyArticle.keys()),
+            columns=["Frequency in article"]
+        )
+        pd.set_option('display.float_format', '{:.4f}'.format) # wyswietlaj w zmiennoprzecinkowej , nie w naukowej
+        print(df1 , df2)
+        df = pd.concat([df1 , df2] , axis=1 , join='inner')
+        print(df)
 
 
 
@@ -103,20 +153,10 @@ class Scraper():
 
 
 
-
-    def analyze_relative_word_freq(self):
-        pass
 
 
     def auto_count_words(self):
         pass
-
-
-        # with open(file_name , 'w' , encoding='utf-8') as csvfile:
-        #     writer = csv.writer(csvfile)
-        #     for row in rows:
-        #         writer.writerow(row)
-
 
 
 
@@ -153,4 +193,5 @@ if __name__ == '__main__':
     URL = 'https://bulbapedia.bulbagarden.net/wiki'
     obiekt = Scraper(URL)
     #obiekt.table('Type' , 2)
-    obiekt.count_words('Type')
+    obiekt.summary("Team Rocket")
+    obiekt.analyze_relative_word_freq('Type' , "cos" , 3)
