@@ -2,11 +2,6 @@ import argparse
 import csv
 import json
 import time
-from itertools import count
-from pickle import FALSE
-from pydoc import replace
-
-import numpy as np
 import wordfreq
 import requests
 import pandas as pd
@@ -53,30 +48,39 @@ class Scraper():
         phrase_tmp = phrase.replace(" " , "_")
         URL_tmp = self.link + '/' + phrase_tmp
         soup = self.SiteDownloader(URL_tmp)
-        file_name = f'{phrase_tmp}.csv'
+
         tables = soup.find_all('table')
         if number > len(tables):
             print(f"Na stronie {URL_tmp} nie ma tylu tabel")
             return None
 
         table = tables[number - 1]
-        rows = table.find_all('tr') # wiersze
-        data = []
-        print(rows)
+        rows = table.find_all('tr')
         tableForPandas = []
         for row in rows:
-            dataAndHeadersInRow = row.find_all(['td' , 'th']) # dane i nagłówki
-            dataAndHeadersInRowText = [data.get_text().strip() for data in dataAndHeadersInRow] # bierzemy jedynie tekst
-                                                                                     # z każdej komorki
-            print(dataAndHeadersInRow)
-            tableForPandas.append(pd.Series(dataAndHeadersInRowText))
-            data.append(dataAndHeadersInRowText)
-        #print(tableForPandas)
+            dataRow = row.find_all(['td' , 'th' , 'thead'])
+            dataRowText = [data.get_text().strip() for data in dataRow]
+
+            tableForPandas.append(pd.Series(dataRowText))
+            print(dataRowText)
+
+        df = pd.DataFrame(tableForPandas)
+
+        if first_row_header:
+            df.columns = df.iloc[0]
+            df = df[1:].reset_index(drop=True)
+
+        df = df.set_index(df.columns[0])
+        print(df)
+        with open(f"{phrase_tmp}.csv" , 'w' , encoding='utf-8') as file:
+            writer = csv.writer(file , delimiter= ';')
+            writer.writerows(tableForPandas)
+        return None
 
     def count_words(self , phrase):
         if phrase is None:
             return None
-        phrase_tmp = self.changingSpaceTo_(phrase)
+        phrase_tmp = phrase.replace(" " , "_")
         soup = self.SiteDownloader(self.link + '/' + phrase_tmp)
         if self.language == '':
             response = requests.get(self.link + '/' + phrase_tmp)
@@ -84,6 +88,7 @@ class Scraper():
 
         if soup is None:
             return
+
         text = soup.find("div" , class_ = "mw-content-ltr mw-parser-output").get_text(strip=True , separator=" ")
 
         words = []
@@ -114,6 +119,7 @@ class Scraper():
                 setOfWords[word] = 1
             else:
                 setOfWords[word] += 1
+        print()
         with open("./word-count.json" , "w"  , encoding="utf-8") as file:
             json.dump(setOfWords ,file, ensure_ascii=False)
         self.used_count_words = True
@@ -121,6 +127,8 @@ class Scraper():
 
 
     def analyze_relative_word_frequency(self, mode, count, chart = None):
+        if not self.used_count_words:
+            return None
         if (mode not in { "article" , "language"} or count < 0 or
                 (chart != None and len(chart) < 4 and chart[len(chart) - 4: len(chart)] != ".png" )):
             return None
@@ -155,8 +163,8 @@ class Scraper():
         pd.set_option('display.float_format', '{:.4f}'.format) # wyswietlaj w zmiennoprzecinkowej , nie w naukowej
 
         df = pd.merge(
-            df1,
             df2,
+            df1,
             on="word",
             how="inner"
         )
@@ -166,8 +174,9 @@ class Scraper():
         if mode == "language":
             df = df.sort_values("frequency in wiki language" , ascending=False)
 
-        print(df)
         df = df.head(count)
+        print(df)
+
         if chart is None:
             return None
 
@@ -182,7 +191,6 @@ class Scraper():
         return None
 
     def help_auto_count_words(self, phrase, depth, wait, alreadyProcessed):
-        print(f"Jestem {phrase} i glębokość to {depth}")
 
         with open("./word-count.json" , "r", encoding='utf-8') as file:
             alreadyProcessdWords = json.load(file)
@@ -197,13 +205,12 @@ class Scraper():
         #merguje je
         for k, v in alreadyProcessdWords.items():
             if k in newWords:
-                newWords[k] += v  # dodajemy wartości
+                newWords[k] += v
             else:
-                newWords[k] = v  # jeśli klucz nowy, dodajemy
+                newWords[k] = v
 
         with open("./word-count.json" , "w" , encoding='utf-8') as file:
             json.dump(newWords ,file , ensure_ascii=False)
-        print(newWords['the'])
         if depth <= 0:
             return
 
@@ -245,6 +252,7 @@ class Scraper():
                 alreadyProcessed.append(hyperlink)
                 self.help_auto_count_words(hyperlink , depth - 1 , wait , alreadyProcessed)
 
+
 def creating_parser():
     parser = argparse.ArgumentParser()
 
@@ -265,7 +273,7 @@ def creating_parser():
     parser.add_argument(
         '--number',
         type = int,
-        default= None,
+        default= -1,
         help = 'searching for n-th table'
     )
 
@@ -340,7 +348,6 @@ class Control():
         self.args = creating_parser()
         self.scraper = Scraper(URL)
     def iterateArguments(self):
-        print(self.args)
         if self.args == {}:
             print("Nie podano żadnych argumentów")
             return
@@ -371,13 +378,10 @@ class Control():
             self.args.wait
         )
 
-
-
-
 if __name__ == '__main__':
-    URL = 'https://bulbapedia.bulbagarden.net/wiki' #to jest scrapper tej wiki
-    controler = Control(URL)
-    controler.iterateArguments()
-
-
-
+    URL = 'https://bulbapedia.bulbagarden.net/wiki'
+    # controler = Control(URL)
+    # controler.iterateArguments()
+    obiekt = Scraper(URL)
+    obiekt.table('Kanto' , 8, True)
+    obiekt.table('Type' , 2 , True)
