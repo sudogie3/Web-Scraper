@@ -1,11 +1,13 @@
 import argparse
 import csv
 import json
-from itertools import count
+from pickle import FALSE
 
+import numpy as np
 import wordfreq
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 
 
@@ -111,7 +113,7 @@ class Scraper():
         return True
 
 
-    def analyze_relative_word_freq(self, phrase , mode , count , chart = False):
+    def analyze_relative_word_freq(self, phrase , mode , count , chart = None):
         if not self.count_words(phrase):
             return False
         with open("./word-count.json" , "r" , encoding="utf-8") as file:
@@ -128,32 +130,50 @@ class Scraper():
             setFrequencyLang[word] = wordfreq.word_frequency(word , lang = language)/mostFrequencyLang
             sumWords += siteData[word]
         mostFrequencyArticle = max(siteData.values()) /sumWords
+
         for word in siteData:
             setFrequencyArticle[word] = (siteData[word]/sumWords)/mostFrequencyArticle
-        print(setFrequencyArticle ,"\n", setFrequencyLang)
 
         df1 = pd.DataFrame(
-            list(setFrequencyLang.values()),
-            index= list(setFrequencyLang.keys()) ,
-            columns=["Frequency in wiki language"]
+            {
+            "word": setFrequencyLang.keys() ,
+            "frequency in wiki language": setFrequencyLang.values()
+             }
         )
         df2 = pd.DataFrame(
-            list(setFrequencyArticle.values()),
-            index= list(setFrequencyArticle.keys()),
-            columns=["Frequency in article"]
+            {
+            "word": setFrequencyArticle.keys() ,
+            "frequency in article": setFrequencyArticle.values()
+             }
         )
         pd.set_option('display.float_format', '{:.4f}'.format) # wyswietlaj w zmiennoprzecinkowej , nie w naukowej
-        print(df1 , df2)
-        df = pd.concat([df1 , df2] , axis=1 , join='inner')
+
+        df = pd.merge(
+            df1,
+            df2,
+            on="word",
+            how="inner"
+        )
+
+        if mode == "article":
+            df = df.sort_values("frequency in article" , ascending=False)
+        if mode == "language":
+            df = df.sort_values("frequency in wiki language" , ascending=False)
+
         print(df)
+        df = df.head(count)
+        if chart is None:
+            return None
 
-
-
-
-
-
-
-
+        df.set_index("word")[["frequency in article", "frequency in wiki language"]].plot(
+            kind="bar",
+            figsize=(10, 5)
+        )
+        plt.ylabel("Frequency")
+        plt.xticks(rotation=0)
+        plt.tight_layout()
+        plt.savefig(chart)
+        return None
 
     def auto_count_words(self):
         pass
@@ -193,5 +213,4 @@ if __name__ == '__main__':
     URL = 'https://bulbapedia.bulbagarden.net/wiki'
     obiekt = Scraper(URL)
     #obiekt.table('Type' , 2)
-    obiekt.summary("Team Rocket")
-    obiekt.analyze_relative_word_freq('Type' , "cos" , 3)
+    obiekt.analyze_relative_word_freq('Type' , "language" , 3, chart = './compare-Frequency.png')
