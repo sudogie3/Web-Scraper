@@ -21,6 +21,8 @@ class Scraper():
     def __init__(self , link_URL ,use_local_html_file_instead=False):
         self.link = link_URL
         self.use_lokal = use_local_html_file_instead
+        self.used_count_words = False
+        self.language = ''
 
     def SiteDownloader(self, URL):
         response = requests.get(URL)
@@ -31,15 +33,23 @@ class Scraper():
         return soup
 
     def summary(self , phrase):
+        if phrase is None:
+            return None
         phrase_tmp = phrase.replace(" " , "_")
         URL_tmp = self.link + '/' + phrase_tmp
         soup = self.SiteDownloader(URL_tmp)
         # zrobić to w div class
-        para  = soup.find('p').get_text()
+        div = soup.find("div", class_="mw-content-ltr mw-parser-output")
+        if div == None:
+            print( f"Brak artykułu an stronie {URL_tmp}")
+            return None
+        para = div.find('p').get_text()
         print(para)
 
 
     def table(self , phrase , number , first_row_header = False):
+        if phrase is None:
+            return None
         phrase_tmp = phrase.replace(" " , "_")
         URL_tmp = self.link + '/' + phrase_tmp
         soup = self.SiteDownloader(URL_tmp)
@@ -63,9 +73,14 @@ class Scraper():
             data.append(dataAndHeadersInRowText)
         #print(tableForPandas)
 
-    def count_words(self , phrase): # done
+    def count_words(self , phrase):
+        if phrase is None:
+            return None
         phrase_tmp = self.changingSpaceTo_(phrase)
         soup = self.SiteDownloader(self.link + '/' + phrase_tmp)
+        if self.language == '':
+            response = requests.get(self.link + '/' + phrase_tmp)
+            self.language = response.headers.get("Content-Language")
 
         if soup is None:
             return
@@ -101,24 +116,24 @@ class Scraper():
                 setOfWords[word] += 1
         with open("./word-count.json" , "w"  , encoding="utf-8") as file:
             json.dump(setOfWords ,file, ensure_ascii=False)
+        self.used_count_words = True
         return True
 
 
-    def analyze_relative_word_freq(self, phrase , mode , count , chart = None):
-        if not self.count_words(phrase):
-            return False
+    def analyze_relative_word_frequency(self, mode, count, chart = None):
+        if (mode not in { "article" , "language"} or count < 0 or
+                (chart != None and len(chart) < 4 and chart[len(chart) - 4: len(chart)] != ".png" )):
+            return None
+
         with open("./word-count.json" , "r" , encoding="utf-8") as file:
             siteData = json.load(file)
-        phrase_tmp = phrase.replace(" " , "_")
-        response = requests.get(self.link + '/' + phrase_tmp)
-        language = response.headers.get("Content-Language")
         setFrequencyLang = {}
         setFrequencyArticle = {}
         sumWords = 0
-        mostFrequencyLang = wordfreq.word_frequency(wordfreq.top_n_list(n = 1 , lang= language)[0] , language)
+        mostFrequencyLang = wordfreq.word_frequency(wordfreq.top_n_list(n = 1 , lang= self.language)[0] , self.language)
 
         for word in siteData:
-            setFrequencyLang[word] = wordfreq.word_frequency(word , lang = language)/mostFrequencyLang
+            setFrequencyLang[word] = wordfreq.word_frequency(word , lang = self.language)/mostFrequencyLang
             sumWords += siteData[word]
         mostFrequencyArticle = max(siteData.values()) /sumWords
 
@@ -189,7 +204,7 @@ class Scraper():
         with open("./word-count.json" , "w" , encoding='utf-8') as file:
             json.dump(newWords ,file , ensure_ascii=False)
         print(newWords['the'])
-        if depth == 0:
+        if depth <= 0:
             return
 
         soup = self.SiteDownloader(self.link + "/" + phrase)
@@ -210,6 +225,8 @@ class Scraper():
 
 
     def auto_count_words(self , phrase , depth , wait):
+        if phrase is None or depth < 0 or wait < 0:
+            return
         # szukamy hyperlączy
         soup = self.SiteDownloader(self.link + "/" + phrase)
 
@@ -230,29 +247,137 @@ class Scraper():
 
 def creating_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--summary' , type = str , help ='searching phrase')
-    # parser.add_argument('--table' , type = str , help = 'searching for a table in ...')
-    # parser.add_argument('--number' , type = int , help = 'searching for n-th table')
-    # parser.add_argument('--first-row-is-header' , type = bool , action=False , help = 'if this argument '
-    #                                                                                   'is given then we claim that first '
-    #                                                                                   'row is a header')
-    # parser.add_argument('--count-words' , type = str ,help = 'counting in given phrase words' )
-    # parser.add_argument('--analyze-relative-word-frequency' , type = bool , help = 'shows the difference'
-    #                                                                                ' between frequencies in the words '
-    #                                                                                'in article' )
-    # parser.add_argument('--mode' , type = str , help = 'sorts the relative-word-frequencies table by '
-    #                                                    'the given arg')
-    # parser.add_argument('--chart' , type = str , action=False , help= 'creates a chart of the '
-    #                                                                   'relative-word-frequency analiz')
-    # parser.add_argument('--auto-count-words' , type = str , help='counting in given phrase '
-    #                                                              'words and going into hyperlinks')
 
-    return parser
+    parser.add_argument(
+        '--summary',
+        type = str,
+        default= None,
+        help ='searching phrase'
+    )
+
+    parser.add_argument(
+        '--table',
+        type = str,
+        default= None,
+        help = 'searching for a table in ...'
+    )
+
+    parser.add_argument(
+        '--number',
+        type = int,
+        default= None,
+        help = 'searching for n-th table'
+    )
+
+    parser.add_argument(
+        '--first-row-is-header',
+        type = bool,
+        default= False,
+        help = 'if this argument is given then we claim that first row is a header'
+    )
+
+    parser.add_argument(
+        '--count-words',
+        type = str,
+        default= None,
+        help = 'counting in given phrase words'
+    )
+
+    parser.add_argument(
+        '--analyze-relative-word-frequency',
+        action='store_true',
+        help = 'shows the difference between frequencies in the words in article'
+    )
+
+    parser.add_argument(
+        '--count',
+        type = int,
+        default=-1,
+        help = 'number of elements in the table which we display'
+    )
+
+    parser.add_argument(
+        '--mode',
+        type = str,
+        default='',
+        help = 'sorts the relative-word-frequencies table by the given arg'
+    )
+
+    parser.add_argument(
+        '--chart',
+        type = str,
+        default=None,
+        help= 'creates a chart of the relative-word-frequency analiz'
+    )
+
+    parser.add_argument(
+        '--auto-count-words',
+        type = str,
+        default=None,
+        help='counting in given phrase words and going into hyperlinks'
+    )
+
+    parser.add_argument(
+        '--depth',
+        type = int,
+        default=-1,
+        help='a number which says how deep would our recursive stack be'
+    )
+
+    parser.add_argument(
+        '--wait',
+        type = float,
+        default=-1,
+        help='a number which says how much time would we wait between calling another request'
+    )
+
+    args = parser.parse_args()
+
+    return args
+
+class Control():
+    def __init__(self , URL):
+        self.args = creating_parser()
+        self.scraper = Scraper(URL)
+    def iterateArguments(self):
+        print(self.args)
+        if self.args == {}:
+            print("Nie podano żadnych argumentów")
+            return
+
+        self.scraper.summary(
+            self.args.summary
+        )
+
+        self.scraper.table(
+            self.args.table,
+            self.args.number,
+            self.args.first_row_is_header
+        )
+
+        self.scraper.count_words(
+            self.args.count_words
+        )
+        if self.args.analyze_relative_word_frequency:
+            self.scraper.analyze_relative_word_frequency(
+                self.args.mode,
+                self.args.count,
+                self.args.chart
+            )
+
+        self.scraper.auto_count_words(
+            self.args.auto_count_words,
+            self.args.depth,
+            self.args.wait
+        )
+
+
 
 
 if __name__ == '__main__':
     URL = 'https://bulbapedia.bulbagarden.net/wiki' #to jest scrapper tej wiki
-    obiekt = Scraper(URL)
+    controler = Control(URL)
+    controler.iterateArguments()
 
 
 
