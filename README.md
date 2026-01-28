@@ -5,7 +5,7 @@ It allows users to scrape and analyze most of wiki pages for educational and dat
 
 The tool can be used to:
 
--  Count words in a Wikipedia article  
+-  Count words in a Wiki article  
 -  Extract and display selected tables  
 -  Print the first paragraph of an article  
 
