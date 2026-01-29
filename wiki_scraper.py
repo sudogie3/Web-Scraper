@@ -19,6 +19,8 @@ class Scraper:
         self.use_lokal = use_local_html_file_instead
         self.used_count_words = False
         self.language = ""
+        self.alreadyProcessed = {}
+        self.pierwszy = True
 
     def SiteDownloader(self, URL):
         response = requests.get(URL)
@@ -28,20 +30,24 @@ class Scraper:
         soup = BeautifulSoup(response.text, "html.parser")
         return soup
 
+    # zrobiona
     def summary(self, phrase):
         if phrase is None:
             return None
         phrase_tmp = phrase.replace(" ", "_")
         URL_tmp = self.link + "/" + phrase_tmp
         soup = self.SiteDownloader(URL_tmp)
+        if soup is None:
+            return None
         # zrobić to w div class
         div = soup.find("div", class_="mw-content-ltr mw-parser-output")
-        if div == None:
-            print(f"Brak artykułu an stronie {URL_tmp}")
+        if div is None:
+            print(f"Brak artykułu {phrase} an stronie {self.link}")
             return None
         para = div.find("p").get_text()
         print(para)
 
+    # poprawić foramtowanie tabeli i dodac counta
     def table(self, phrase, number, first_row_header=False):
         if phrase is None:
             return None
@@ -60,23 +66,33 @@ class Scraper:
         for row in rows:
             dataRow = row.find_all(["td", "th", "thead"])
             dataRowText = [data.get_text().strip() for data in dataRow]
-
             tableForPandas.append(pd.Series(dataRowText))
-            print(dataRowText)
 
         df = pd.DataFrame(tableForPandas)
 
         if first_row_header:
             df.columns = df.iloc[0]
             df = df[1:].reset_index(drop=True)
-
         df = df.set_index(df.columns[0])
         print(df)
+
+        setOfWords = {}
+        for i in range(first_row_header, len(tableForPandas)):
+            for j in range(1, len(tableForPandas[i])):
+                data = tableForPandas[i][j]
+                if data in setOfWords:
+                    setOfWords[data] += 1
+                else:
+                    setOfWords[data] = 1
+
+        df2 = pd.DataFrame(setOfWords.items(), columns=['word', 'count'])
+        print(df2)
+
         with open(f"{phrase_tmp}.csv", "w", encoding="utf-8") as file:
             writer = csv.writer(file, delimiter=";")
             writer.writerows(tableForPandas)
         return None
-
+    # zrobione
     def count_words(self, phrase):
         if phrase is None:
             return None
@@ -121,7 +137,6 @@ class Scraper:
                 setOfWords[word] = 1
             else:
                 setOfWords[word] += 1
-        print()
         with open("./word-count.json", "w", encoding="utf-8") as file:
             json.dump(setOfWords, file, ensure_ascii=False)
         self.used_count_words = True
@@ -134,7 +149,7 @@ class Scraper:
             mode not in {"article", "language"}
             or count < 0
             or (
-                chart != None
+                chart is not None
                 and len(chart) < 4
                 and chart[len(chart) - 4 : len(chart)] != ".png"
             )
@@ -194,78 +209,67 @@ class Scraper:
         df.set_index("word")[
             ["frequency in article", "frequency in wiki language"]
         ].plot(kind="bar", figsize=(10, 5))
+        plt.title("Frequency of some words on Wiki")
         plt.ylabel("Frequency")
         plt.xticks(rotation=0)
-        plt.tight_layout()
         plt.savefig(chart)
         return None
-
-    def help_auto_count_words(self, phrase, depth, wait, alreadyProcessed):
-
-        with open("./word-count.json", "r", encoding="utf-8") as file:
-            alreadyProcessdWords = json.load(file)
-
-        time.sleep(wait)  # zasypiamy na wait sekund
-
-        self.count_words(phrase)
-        with open("./word-count.json", "r", encoding="utf-8") as file:
-            newWords = json.load(file)
-
-        # merguje je
-        for k, v in alreadyProcessdWords.items():
-            if k in newWords:
-                newWords[k] += v
-            else:
-                newWords[k] = v
-
-        with open("./word-count.json", "w", encoding="utf-8") as file:
-            json.dump(newWords, file, ensure_ascii=False)
-        if depth <= 0:
-            return
-
-        soup = self.SiteDownloader(self.link + "/" + phrase)
-
-        para = soup.find_all("p")
-        hyperlinks = []
-        for paragraph in para:
-            tmp_link = paragraph.find("a")
-            if (
-                tmp_link
-                and ("href" in tmp_link.attrs)
-                and (len(tmp_link["href"]) >= 6)
-                and (tmp_link["href"][:6] == "/wiki/")
-            ):
-                hyperlinks.append(tmp_link["href"][6:])
-
-        for hyperlink in hyperlinks:
-            if hyperlink not in alreadyProcessed:
-                alreadyProcessed.append(hyperlink)
-                self.help_auto_count_words(hyperlink, depth - 1, wait, alreadyProcessed)
 
     def auto_count_words(self, phrase, depth, wait):
         if phrase is None or depth < 0 or wait < 0:
             return
+        # print(f"Jestem w {phrase}")
+        # zasypiamy na wait sekund
+        time.sleep(wait)
+        if self.pierwszy:
+            self.count_words(phrase)
+            self.pierwszy = False
+        else:
+            with open("./word-count.json", "r", encoding="utf-8") as file:
+                alreadyProcessdWords = json.load(file)
+
+
+            if not self.pierwszy:
+                self.count_words(phrase)
+
+            with open("./word-count.json", "r", encoding="utf-8") as file:
+                newWords = json.load(file)
+
+            if self.pierwszy:
+                self.pierwszy = False
+
+            # merguje je
+            for k, v in alreadyProcessdWords.items():
+                if k in newWords:
+                    newWords[k] += v
+                else:
+                    newWords[k] = v
+
+            with open("./word-count.json", "w", encoding="utf-8") as file:
+                json.dump(newWords, file, ensure_ascii=False)
+            if depth == 0:
+                return
+
         # szukamy hyperlączy
         soup = self.SiteDownloader(self.link + "/" + phrase)
 
         para = soup.find_all("p")
         hyperlinks = []
         for paragraph in para:
-            tmp_link = paragraph.find("a")
-            if (
-                tmp_link
-                and ("href" in tmp_link.attrs)
-                and (len(tmp_link["href"]) >= 6)
-                and (tmp_link["href"][:6] == "/wiki/")
-            ):
-                hyperlinks.append(tmp_link["href"][6:])
+            tmp_links = paragraph.find_all("a")
+            for link in tmp_links:
+                if (
+                    ("href" in link.attrs)
+                    and (len(link["href"]) >= 6)
+                    and (link["href"][:6] == "/wiki/")
+                ):
+                    hyperlinks.append(link["href"][6:])
 
-        self.count_words(phrase)
         alreadyProcessed = []
         for hyperlink in hyperlinks:
             if hyperlink not in alreadyProcessed:
                 alreadyProcessed.append(hyperlink)
-                self.help_auto_count_words(hyperlink, depth - 1, wait, alreadyProcessed)
+                self.auto_count_words(hyperlink, depth - 1, wait)
 
 
 def creating_parser():
@@ -283,8 +287,7 @@ def creating_parser():
 
     parser.add_argument(
         "--first-row-is-header",
-        type=bool,
-        default=False,
+        action="store_true",
         help="if this argument is given then we claim that first row is a header",
     )
 
@@ -374,8 +377,7 @@ class Control:
 
 if __name__ == "__main__":
     URL = "https://bulbapedia.bulbagarden.net/wiki"
-    # controler = Control(URL)
-    # controler.iterateArguments()
-    obiekt = Scraper(URL)
-    obiekt.table("Kanto", 8, True)
-    obiekt.table("Type", 2, True)
+    controler = Control(URL)
+    controler.iterateArguments()
+    # obiekt = Scraper(URL)
+    # obiekt.auto_count_words('Type' , 2 , 0.1)
