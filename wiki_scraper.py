@@ -3,7 +3,6 @@ import csv
 import json
 import os.path
 import time
-from xxlimited_35 import Null
 
 import wordfreq
 import requests
@@ -11,8 +10,54 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 
+def whatLanguageOffline(phrase):
+    phrase_tmp = phrase.replace(" ", "_")
+    path = f"./{phrase_tmp}.html"
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r', encoding='utf-8') as file:
+        htmlText = file.read()
+    soup = BeautifulSoup(htmlText, "html.parser")
+    return soup.find('html').get('lang')
 
-# Musze wybrać jakiego typu ma być to wiki (kanye west , marvel , ekipa friza)
+def isItWikiPage(phrase):
+    if phrase is None:
+        return False
+    prefix = "/wiki/"
+    if len(phrase) >= len(prefix) and phrase[:len(prefix)] == prefix:
+        return True
+    return False
+
+def extractPhrase(phrase):
+    prefix = "/wiki/"
+    if isItWikiPage(phrase):
+        return phrase[len(prefix):]
+    return None
+
+def SiteDownloader(URL):
+    response = requests.get(URL)
+    if response.status_code != 200:
+        print(f"Nie ma takiej strony: {URL} lub nie działa")
+        return None
+    soup = BeautifulSoup(response.text, "html.parser")
+    return soup
+def getWordsFromText(text):
+    if text is None:
+        return None
+    text = str(text)
+    words = []
+    word = ""
+    for i in range(0,len(text)):
+        letter = text[i]
+        if letter == " ":
+            words.append(word)
+            word = ""
+        elif letter.isalpha() or letter == "-":
+            word += letter.lower()
+            if i == len(text) - 1:
+                words.append(word)
+    return words
+
 
 
 class Scraper:
@@ -25,13 +70,6 @@ class Scraper:
         self.alreadyProcessed = {}
         self.first = True
 
-    def SiteDownloader(self, URL):
-        response = requests.get(URL)
-        if response.status_code != 200:
-            print(f"Nie ma takiej strony: {URL} lub nie działa")
-            return None
-        soup = BeautifulSoup(response.text, "html.parser")
-        return soup
 
     # zrobiona
     def summary(self, phrase):
@@ -48,7 +86,7 @@ class Scraper:
             soup = BeautifulSoup(htmlText , "html.parser")
         else:
             URL_tmp = self.link + "/" + phrase_tmp
-            soup = self.SiteDownloader(URL_tmp)
+            soup = SiteDownloader(URL_tmp)
 
         if soup is None or '':
             return None
@@ -74,7 +112,7 @@ class Scraper:
                 htmlText = file.read()
             soup = BeautifulSoup(htmlText, "html.parser")
         else:
-            soup = self.SiteDownloader(URL_tmp)
+            soup = SiteDownloader(URL_tmp)
 
         tables = soup.find_all("table")
         if number > len(tables):
@@ -114,15 +152,6 @@ class Scraper:
             writer.writerows(tableForPandas)
         return df, df2
     # zrobione
-    def what_language_offline(self, phrase):
-        phrase_tmp = phrase.replace(" ", "_")
-        path = f"./{phrase_tmp}.html"
-        if not os.path.exists(path):
-            return None
-        with open(path, 'r', encoding='utf-8') as file:
-            htmlText = file.read()
-        soup = BeautifulSoup(htmlText, "html.parser")
-        return soup.find('html').get('lang')
 
     def count_words(self, phrase):
         if phrase is None or (self.link is None != self.use_local is None):
@@ -139,7 +168,7 @@ class Scraper:
             soup = BeautifulSoup(htmlText , "html.parser")
         else:
             URL_tmp = self.link + "/" + phrase_tmp
-            soup = self.SiteDownloader(URL_tmp)
+            soup = SiteDownloader(URL_tmp)
 
         self.language = soup.find('html').get('lang')
         if soup is None:
@@ -148,15 +177,8 @@ class Scraper:
         text = soup.find("div", class_="mw-content-ltr mw-parser-output").get_text(
             strip=True, separator=" "
         )
-
-        words = []
-        word = ""
-        for letter in text:
-            if letter == " ":
-                words.append(word)
-                word = ""
-            elif letter.isalpha() or letter == "-":
-                word += letter.lower()
+        print(text)
+        words = getWordsFromText(text)
 
         # deleting hyperlinks
         i = 0
@@ -291,7 +313,7 @@ class Scraper:
                 return
 
         # szukamy hyperlączy
-        soup = self.SiteDownloader(self.link + "/" + phrase)
+        soup = SiteDownloader(self.link + "/" + phrase)
 
         para = soup.find_all("p")
         hyperlinks = []
@@ -419,5 +441,4 @@ if __name__ == "__main__":
     URL = "https://bulbapedia.bulbagarden.net/wiki"
     controler = Control(URL)
     controler.iterateArguments()
-    obiekt = Scraper(URL , use_local_html_file_instead=True)
-    obiekt.summary('Team Rocket')
+    print(getWordsFromText(1))

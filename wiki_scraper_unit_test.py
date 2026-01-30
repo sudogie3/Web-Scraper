@@ -1,22 +1,38 @@
-from wiki_scraper import Scraper
+from wiki_scraper import whatLanguageOffline , extractPhrase , isItWikiPage , getWordsFromText
 import pytest
 
+@pytest.mark.parametrize("link, expected", [
+    ('/wiki/something', 'something'),
+    ('/wiki/Team_Rocket' , 'Team_Rocket'),
+    ('/wili/Team_Pocket' , None),
+    (None , None)
+])
+def test_extract_phrase(link ,expected):
+    assert extractPhrase(link) == expected
 
-def test_does_the_paragraph_match():
-    webScraper = Scraper(use_local_html_file_instead=True)
-    expected = ("Rocket-dan, literally Rocket Gang) is a villainous team in pursuit of evil"
-                " and the exploitation of Pokémon. The organization is based in the Kanto and Johto regions,"
-                " with a small outpost in the Sevii Islands.")
-    ret = webScraper.summary('Team_Rocket')
-    return ret == expected
+@pytest.mark.parametrize("phraseHTML, expected", [
+    ('Team_Rocket' , 'en'),
+    ('Type' , None) # nie mam jego kodu w katalogu
+])
+def test_what_langauge(phraseHTML , expected):
+    assert whatLanguageOffline(phraseHTML) == expected
 
-def test_what_langauge():
-    webScrper = Scraper(use_local_html_file_instead=True)
-    expected_lang = "en"
-    ret = webScrper.what_language_offline('Team_Rocket')
-    return ret == expected_lang
 
-def test_is_it_wiki_page():
-    pass
-def test_does_the_first_table_match():
-    pass
+@pytest.mark.parametrize("link, expected", [
+    ('/wiki/something', True),
+    ('/wiki/Team_Rocket' , True),
+    ('/wili/Team_Pocket' , False),
+    (None , False)
+])
+def test_is_it_wiki_page(link , expected):
+    assert isItWikiPage(link) == expected
+
+
+@pytest.mark.parametrize("text, expected", [
+    ('Hello World', ['hello' , 'world']),
+    ('DrinkWater', ['drinkwater']),
+    (1, []),
+    (None, None)
+])
+def test_parse_text(text , expected):
+    assert getWordsFromText(text) == expected
