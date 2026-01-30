@@ -57,7 +57,8 @@ def getWordsFromText(text):
             if i == len(text) - 1:
                 words.append(word)
     return words
-
+def CountOfWords():
+    if
 
 
 class Scraper:
@@ -441,4 +442,4 @@ if __name__ == "__main__":
     URL = "https://bulbapedia.bulbagarden.net/wiki"
     controler = Control(URL)
     controler.iterateArguments()
-    print(getWordsFromText(1))
+    obiekt = Scraper(use_local_html_file_instead=True)
