@@ -37,7 +37,7 @@ def extractPhrase(phrase):
 def SiteDownloader(URL):
     response = requests.get(URL)
     if response.status_code != 200:
-        print(f"Nie ma takiej strony: {URL} lub nie działa")
+        print(f"Nie ma takiej strony: {URL} lub nie działa, kod request {response}")
         return None
     soup = BeautifulSoup(response.text, "html.parser")
     return soup
@@ -57,9 +57,6 @@ def getWordsFromText(text):
             if i == len(text) - 1:
                 words.append(word)
     return words
-def CountOfWords():
-    if
-
 
 class Scraper:
 
@@ -75,13 +72,13 @@ class Scraper:
     # zrobiona
     def summary(self, phrase):
         if phrase is None or (self.link is None != self.use_local is None):
-            return None
+            return False
         phrase_tmp = phrase.replace(" ", "_")
 
         if self.use_local == True:
             path = f"./{phrase_tmp}.html"
             if not os.path.exists(path):
-                return None
+                return False
             with open(path , 'r' , encoding='utf-8') as file:
                 htmlText = file.read()
             soup = BeautifulSoup(htmlText , "html.parser")
@@ -90,11 +87,11 @@ class Scraper:
             soup = SiteDownloader(URL_tmp)
 
         if soup is None or '':
-            return None
+            return False
         div = soup.find("div", class_="mw-content-ltr mw-parser-output")
         if div is None:
             print(f"Brak artykułu {phrase} an stronie {self.link}")
-            return None
+            return False
         para = div.find("p").get_text()
         print(para)
         return para
@@ -102,13 +99,13 @@ class Scraper:
     # poprawić foramtowanie tabeli i dodac counta
     def table(self, phrase, number, first_row_header=False):
         if phrase is None or (self.link is None != self.use_local is None):
-            return None
+            return False
         phrase_tmp = phrase.replace(" ", "_")
         URL_tmp = self.link + "/" + phrase_tmp
         if self.use_local:
             path = f"./{phrase_tmp}.html"
             if not os.path.exists(path):
-                return None
+                return False
             with open(path, 'r', encoding='utf-8') as file:
                 htmlText = file.read()
             soup = BeautifulSoup(htmlText, "html.parser")
@@ -118,7 +115,7 @@ class Scraper:
         tables = soup.find_all("table")
         if number > len(tables):
             print(f"Na stronie {URL_tmp} nie ma tylu tabel")
-            return None
+            return False
 
         table = tables[number - 1]
         rows = table.find_all("tr")
@@ -156,13 +153,13 @@ class Scraper:
 
     def count_words(self, phrase):
         if phrase is None or (self.link is None != self.use_local is None):
-            return None
+            return False
         phrase_tmp = phrase.replace(" ", "_")
 
         if self.use_local == True:
             path = f"./{phrase_tmp}.html"
             if not os.path.exists(path):
-                return None
+                return False
 
             with open(path, 'r' , encoding='utf-8') as file:
                 htmlText = file.read()
@@ -171,14 +168,12 @@ class Scraper:
             URL_tmp = self.link + "/" + phrase_tmp
             soup = SiteDownloader(URL_tmp)
 
-        self.language = soup.find('html').get('lang')
         if soup is None:
-            return
-
-        text = soup.find("div", class_="mw-content-ltr mw-parser-output").get_text(
+            return False
+        self.language = soup.find('html').get('lang')
+        text = soup.find("div", class_="mw-parser-output").get_text(
             strip=True, separator=" "
         )
-        print(text)
         words = getWordsFromText(text)
 
         # deleting hyperlinks
@@ -207,7 +202,7 @@ class Scraper:
 
     def analyze_relative_word_frequency(self, mode, count, chart=None):
         if not self.used_count_words:
-            return None
+            return False
         if (
             mode not in {"article", "language"}
             or count < 0
@@ -217,7 +212,7 @@ class Scraper:
                 and chart[len(chart) - 4 : len(chart)] != ".png"
             )
         ):
-            return None
+            return False
 
         with open("./word-count.json", "r", encoding="utf-8") as file:
             siteData = json.load(file)
@@ -267,7 +262,7 @@ class Scraper:
         print(df)
 
         if chart is None:
-            return None
+            return False
 
         df.set_index("word")[
             ["frequency in article", "frequency in wiki language"]
@@ -276,7 +271,7 @@ class Scraper:
         plt.ylabel("Frequency")
         plt.xticks(rotation=0)
         plt.savefig(chart)
-        return None
+        return True
 
     def auto_count_words(self, phrase, depth, wait):
         if phrase is None or depth < 0 or wait < 0 or (self.link is None != self.use_local is None):
@@ -439,7 +434,8 @@ class Control:
 
 
 if __name__ == "__main__":
-    URL = "https://bulbapedia.bulbagarden.net/wiki"
+    URL = "https://www.wikidex.net/wiki"
     controler = Control(URL)
     controler.iterateArguments()
     obiekt = Scraper(use_local_html_file_instead=True)
+    obiekt.count_words('Da Vinci')
