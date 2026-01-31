@@ -22,7 +22,8 @@ BannedLinks = (
 def whatLanguageOffline(phrase):
     """Function that takes the HTML code and gets the language"""
     phrase_tmp = phrase.replace(" ", "_")
-    path = f"WikiPages/{phrase_tmp}.html"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(base_dir, "WikiPages", f"{phrase_tmp}.html")
     if not os.path.exists(path):
         return None
     with open(path, "r", encoding="utf-8") as file:
@@ -63,7 +64,9 @@ def siteDownloader(URL):
 
 def siteDownloaderOffline(phrase):
     """Function for taking the soup from HTML code"""
-    path = f"WikiPages/{phrase}.html"
+    phrase_tmp = phrase.replace(' ', '_')
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(base_dir, "WikiPages", f"{phrase_tmp}.html")
     if not os.path.exists(path):
         return False
 
@@ -116,6 +119,7 @@ class Scraper:
         # used for the auto-count function
         self.alreadyProcessed = set()
         self.first = True
+        self.depth = None
 
     def summary(self, phrase):
         # checks if the arg is correct
@@ -124,7 +128,7 @@ class Scraper:
         phrase_tmp = phrase.replace(" ", "_")
         # checks if we use local file if not then we download
         if self.use_local:
-            siteDownloaderOffline(phrase_tmp)
+            soup = siteDownloaderOffline(phrase_tmp)
         else:
             # goes to SiteDownloader func to get the soup-ed HTML page
             URL_tmp = self.link + "/" + phrase_tmp
@@ -326,6 +330,7 @@ class Scraper:
         # print(f"I'm in {phrase}")
         # we sleep for wait seconds
         if self.first:
+            self.depth = depth
             # if first all we do is single count_word
             self.count_words(phrase)
             self.first = False
@@ -383,4 +388,7 @@ class Scraper:
             if hyperlink not in self.alreadyProcessed:
                 self.alreadyProcessed.add(hyperlink)
                 self.auto_count_words(hyperlink, depth - 1, wait)
+        if self.depth is depth:
+            self.alreadyProcessed = set()
+            self.depth = None
         return True
