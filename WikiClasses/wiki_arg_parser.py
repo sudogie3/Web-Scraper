@@ -1,17 +1,28 @@
 import argparse
 from WikiClasses.wiki_scraper_class import Scraper
 
+
 def creating_parser():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("--summary", type=str, default=None, help="searching phrase")
+    # we are adding arguments to argparse
+    parser.add_argument(
+        "--summary",
+        type=str,
+        default=None,
+        help="searching phrase")
 
     parser.add_argument(
-        "--table", type=str, default=None, help="searching for a table in ..."
+        "--table",
+        type=str,
+        default=None,
+        help="searching for a table in ..."
     )
 
     parser.add_argument(
-        "--number", type=int, default=-1, help="searching for n-th table"
+        "--number",
+        type=int,
+        default=-1,
+        help="searching for n-th table"
     )
 
     parser.add_argument(
@@ -21,7 +32,10 @@ def creating_parser():
     )
 
     parser.add_argument(
-        "--count-words", type=str, default=None, help="counting in given phrase words"
+        "--count-words",
+        type=str,
+        default=None,
+        help="counting in given phrase words"
     )
 
     parser.add_argument(
