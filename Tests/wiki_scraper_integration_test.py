@@ -1,5 +1,5 @@
-from wiki_scraper import Scraper
-
+from WikiClasses.wiki_scraper_class import Scraper
+"""Checking if the summary functions works"""
 def test_summary():
     webScraper = Scraper(use_local_html_file_instead=True)
     expected = ("Rocket-dan, literally Rocket Gang) is a villainous team in pursuit of evil"
